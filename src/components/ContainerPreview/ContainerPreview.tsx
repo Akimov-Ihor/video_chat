@@ -1,7 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  useEffect, useRef, useState,
+} from 'react';
 import {
-  Button, makeStyles, TextField, Typography,
+  Button, Checkbox, FormControlLabel, IconButton, makeStyles, TextField, Typography,
 } from '@material-ui/core';
+
+import {
+  MicSharp as MicSharpIcon,
+  MicOffSharp as MicOffSharpIcon,
+  Videocam as VideocamIcon,
+  VideocamOff as VideocamOffIcon,
+} from '@material-ui/icons';
 
 const useStyles = makeStyles({
   wrapper: {
@@ -11,110 +20,153 @@ const useStyles = makeStyles({
   formContainer: {
     display: 'flex',
     flexDirection: 'column',
+    paddingTop: '90px',
+    paddingBottom: '128px',
   },
-  previewContainer: {
+  formGroup: {
     display: 'flex',
+    flexDirection: 'column',
+    padding: '0 20px',
+  },
+  formSubmitButton: {
+    margin: '25px 5px',
+  },
+
+  previewContainer: {
+    position: 'relative',
+    display: 'flex',
+    justifyContent: 'center',
     margin: '0 31px',
     flexGrow: 1,
     width: '500px',
-    height: '400px',
+    height: '315px',
+    background: '#242424',
+    borderRadius: '14px',
+
+  },
+  previewContainerButtons: {
+    display: 'flex',
+    justifyContent: 'center',
+    position: 'absolute',
+    bottom: '10px',
+    left: 0,
+    right: 0,
+    '& .MuiSvgIcon-root': {
+      fill: 'white',
+    },
+
   },
 });
 
 export const ContainerPreview:React.FC = () => {
-  const videoRef = useRef<any>(null);
-  const audioRef = useRef<any>(null);
+  const deviceRef = useRef<any>(null);
   const [currentStreamVideo, setCurrentStreamVideo] = useState< MediaStream | null >(null);
-  const [currentStreamAudio, setCurrentStreamAudio] = useState< MediaStream | null >(null);
-  const [showBackground, setShowBackground] = useState(false);
+  const [audioStatus, setAudioStatus] = useState<boolean>(false);
+  const [videoStatus, setVideoStatus] = useState<boolean>(false);
 
-  const getVideo = async () => {
-    const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    setCurrentStreamVideo(videoStream);
-    setCurrentStreamAudio(audioStream);
-    const video = videoRef.current;
-    const audio = audioRef.current;
-    if (video) {
-      video.srcObject = videoStream;
-      video.play();
-    }
-    if (audio) {
-      // @ts-ignore
-      audio.srcObject = audioStream;
-      // @ts-ignore
-      audio.play();
-    }
-  };
-  const startAudion = () => {
-    // if (audioRef.current) {
-    // currentStreamVideo.getTracks().forEach((track) => {
-    audioRef.current.play();
-    // });
-    // }
-  };
-  const stopAudion = () => {
-    if (currentStreamAudio) {
-      if (audioRef.current) {
-        audioRef.current.pause();
+  const getDevices = async () => {
+    try {
+      const devicesData = await navigator.mediaDevices.enumerateDevices();
+      const cams = devicesData.filter((device) => device.kind === 'videoinput');
+      const mics = devicesData.filter((device) => device.kind === 'audioinput');
+
+      const constraints = { video: cams.length > 0, audio: mics.length > 0 };
+      const videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+      setCurrentStreamVideo(videoStream);
+      const devices = deviceRef.current;
+      if (devices) {
+        devices.srcObject = videoStream;
+        devices.play();
+
+        if (cams.length) {
+          setVideoStatus(true);
+        }
+        if (mics.length) {
+          setAudioStatus(true);
+        }
       }
+    } catch (e) {
+      throw Error(e);
     }
   };
 
-  const startCamera = () => {
-    setShowBackground(false);
-    console.log(videoRef?.current, currentStreamVideo);
-    if (videoRef.current) {
-      // if (!showBackground) {
-      // setShowBackground(false);
-      // }
-
-      videoRef.current.play();
+  const toggleCameraDevice = (event: React.SyntheticEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (currentStreamVideo && deviceRef.current) {
+      if (videoStatus) {
+        setVideoStatus(false);
+        return currentStreamVideo.getVideoTracks().forEach((track) => ({ ...track, enabled: false }));
+      }
+      setVideoStatus(true);
+      return deviceRef.current.play();
     }
+    return null;
   };
-
-  const stopCamera = () => {
+  const toggleAudioDevice = async (event: React.SyntheticEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     if (currentStreamVideo) {
-      if (videoRef.current) {
-        videoRef.current.load();
+      if (audioStatus) {
+        setAudioStatus(false);
+        return currentStreamVideo.getTracks().forEach((track) => {
+          if (track.readyState === 'live' && track.kind === 'audio') {
+            track.stop();
+          }
+        });
       }
+      setAudioStatus(true);
+      return await getDevices();
     }
+    return null;
+  };
+  const showAudioIcon = () => (audioStatus ? <MicSharpIcon /> : <MicOffSharpIcon />);
+  const showVideoIcon = () => (videoStatus ? <VideocamIcon /> : <VideocamOffIcon />);
+
+  const handleSubmit = (event:React.SyntheticEvent<HTMLFormElement>) => {
+    console.log('audioStatus');
+    event.preventDefault();
   };
 
   useEffect(() => {
-    getVideo();
-    // eslint-disable-next-line
-  }, [videoRef]);
+    (async function () {
+      await getDevices();
+    }());
+  }, [deviceRef]);
 
   const classes = useStyles();
   return (
-    <div className={classes.wrapper}>
-      <div className={classes.formContainer}>
-        <Typography align="center" variant="subtitle1">Join Meeting</Typography>
-        <TextField />
-        <Button />
-      </div>
-      <div className={classes.previewContainer}>
-        { showBackground ? <div>kek</div> : (
-          <video
-            ref={videoRef}
-            // width={300}
-            // height={300}
-            poster={'https://static.remove.bg/remove-bg-web/3661dd45c31a4ff23941855a7e4cedbbf6973643/assets/st'
-          + 'art_remove-79a4598a05a77ca999df1dcb434160994b6fde2c3e9101984fb1be0f16d0a74e.png'}
-          >
+    <>
+      <div className={classes.wrapper}>
+        <div className={classes.formContainer}>
+          <Typography align="center" variant="subtitle1">Join Meeting</Typography>
+          <form className={classes.formGroup} onSubmit={handleSubmit}>
+            <TextField id="outlined-basic" label="Outlined" variant="outlined" />
+            <FormControlLabel
+              value="end"
+              control={<Checkbox color="primary" />}
+              label="Remember my name for future meetings"
+              labelPlacement="end"
+            />
+            <Button variant="contained" type="submit" color="primary" className={classes.formSubmitButton}>
+              <Typography align="center" variant="subtitle2">Join</Typography>
+            </Button>
+          </form>
+
+        </div>
+        <div className={classes.previewContainer}>
+          <video ref={deviceRef}>
             <track kind="captions" />
           </video>
-        ) }
-
-        <audio ref={audioRef}>
-          <track kind="captions" />
-        </audio>
-        <Button onClick={startAudion}>StartAudio</Button>
-        <Button onClick={stopAudion}>StopAudio</Button>
-        <Button onClick={startCamera}>Start</Button>
-        <Button onClick={stopCamera}>Stop</Button>
+          <div className={classes.previewContainerButtons}>
+            <IconButton key="audioButton" onClick={toggleAudioDevice}>
+              {showAudioIcon()}
+            </IconButton>
+            <IconButton key="videoButton" onClick={toggleCameraDevice}>
+              {showVideoIcon()}
+            </IconButton>
+          </div>
+        </div>
       </div>
-    </div>
+
+    </>
   );
 };
