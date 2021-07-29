@@ -5,12 +5,16 @@ import {
   Button, Checkbox, FormControlLabel, IconButton, makeStyles, TextField, Typography,
 } from '@material-ui/core';
 
+import { io } from 'socket.io-client';
+
 import {
   MicSharp as MicSharpIcon,
   MicOffSharp as MicOffSharpIcon,
   Videocam as VideocamIcon,
   VideocamOff as VideocamOffIcon,
 } from '@material-ui/icons';
+
+const socket = io('http://localhost:5000');
 
 const useStyles = makeStyles({
   wrapper: {
@@ -27,6 +31,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     padding: '0 20px',
+  },
+  formGroupInput: {
+    margin: '10px 0',
   },
   formSubmitButton: {
     margin: '25px 5px',
@@ -63,6 +70,11 @@ export const ContainerPreview:React.FC = () => {
   const [currentStreamVideo, setCurrentStreamVideo] = useState< MediaStream | null >(null);
   const [audioStatus, setAudioStatus] = useState<boolean>(false);
   const [videoStatus, setVideoStatus] = useState<boolean>(false);
+  const [userName, setUserName] = useState<string>('');
+  const [checked, setChecked] = useState<boolean>(false);
+
+  const [currentID, setCurrentID] = useState<string>('');
+  const [callId, setCallId] = useState<string>('');
 
   const getDevices = async () => {
     try {
@@ -92,38 +104,33 @@ export const ContainerPreview:React.FC = () => {
 
   const toggleCameraDevice = (event: React.SyntheticEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (currentStreamVideo && deviceRef.current) {
-      if (videoStatus) {
-        setVideoStatus(false);
-        return currentStreamVideo.getVideoTracks().forEach((track) => ({ ...track, enabled: false }));
-      }
-      setVideoStatus(true);
-      return deviceRef.current.play();
+    if (currentStreamVideo) {
+      currentStreamVideo.getVideoTracks()[0].enabled = !videoStatus;
+      return setVideoStatus(!videoStatus);
     }
     return null;
   };
-  const toggleAudioDevice = async (event: React.SyntheticEvent<HTMLButtonElement>) => {
+
+  const toggleAudioDevice = (event: React.SyntheticEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     if (currentStreamVideo) {
-      if (audioStatus) {
-        setAudioStatus(false);
-        return currentStreamVideo.getTracks().forEach((track) => {
-          if (track.readyState === 'live' && track.kind === 'audio') {
-            track.stop();
-          }
-        });
-      }
-      setAudioStatus(true);
-      return await getDevices();
+      currentStreamVideo.getAudioTracks()[0].enabled = !audioStatus;
+      setAudioStatus(!audioStatus);
     }
     return null;
   };
+  const handleChangeName = (event:React.ChangeEvent<HTMLInputElement>) => setUserName(event.target.value.trim());
+  const handleChangeCallId = (event:React.ChangeEvent<HTMLInputElement>) => setCallId(event.target.value.trim());
+  const handleCheck = (event:React.ChangeEvent<HTMLInputElement>) => setChecked(event.target.checked);
+
   const showAudioIcon = () => (audioStatus ? <MicSharpIcon /> : <MicOffSharpIcon />);
   const showVideoIcon = () => (videoStatus ? <VideocamIcon /> : <VideocamOffIcon />);
 
   const handleSubmit = (event:React.SyntheticEvent<HTMLFormElement>) => {
-    console.log('audioStatus');
     event.preventDefault();
+    socket.on('callUser', (data:any) => {
+      console.log(data);
+    });
   };
 
   useEffect(() => {
@@ -132,21 +139,44 @@ export const ContainerPreview:React.FC = () => {
     }());
   }, [deviceRef]);
 
+  useEffect(() => {
+    socket.on('me', (id:string) => {
+      setCurrentID(id);
+    });
+  }, []);
   const classes = useStyles();
+
+
   return (
     <>
       <div className={classes.wrapper}>
         <div className={classes.formContainer}>
           <Typography align="center" variant="subtitle1">Join Meeting</Typography>
+          <Typography align="center" variant="subtitle2">{`Your id ${currentID}`}</Typography>
           <form className={classes.formGroup} onSubmit={handleSubmit}>
-            <TextField id="outlined-basic" label="Outlined" variant="outlined" />
+            <TextField
+              className={classes.formGroupInput}
+              id="outlined-basic"
+              label="Your name"
+              variant="outlined"
+              onChange={handleChangeName}
+              value={userName}
+            />
+            <TextField
+              className={classes.formGroupInput}
+              id="outlined-basic"
+              label="Enter id to call"
+              variant="outlined"
+              onChange={handleChangeCallId}
+              value={callId}
+            />
             <FormControlLabel
               value="end"
-              control={<Checkbox color="primary" />}
+              control={<Checkbox color="primary" value={checked} onChange={handleCheck} />}
               label="Remember my name for future meetings"
               labelPlacement="end"
             />
-            <Button variant="contained" type="submit" color="primary" className={classes.formSubmitButton}>
+            <Button variant="contained" type="submit" color="primary" className={classes.formSubmitButton} disabled={!userName && !callId}>
               <Typography align="center" variant="subtitle2">Join</Typography>
             </Button>
           </form>
